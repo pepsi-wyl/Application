@@ -6,6 +6,15 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface TaskNavKey : NavKey {
     @Serializable
+    data object Welcome : TaskNavKey
+
+    @Serializable
+    data object Login : TaskNavKey
+
+    @Serializable
+    data object SignUp : TaskNavKey
+
+    @Serializable
     data object TaskList : TaskNavKey
 
     @Serializable

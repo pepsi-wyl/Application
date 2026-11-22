@@ -20,12 +20,17 @@ import androidx.navigation3.ui.NavDisplay
 import site.ylan.application.navigation.TaskNavKey
 import site.ylan.application.ui.screens.AddEditTaskScreen
 import site.ylan.application.ui.screens.TaskListScreen
+import site.ylan.application.ui.screens.auth.LoginScreen
+import site.ylan.application.ui.screens.auth.SignUpScreen
+import site.ylan.application.ui.screens.auth.WelcomeScreen
 import site.ylan.application.ui.theme.ApplicationTheme
+import site.ylan.application.viewmodel.AuthViewModel
 import site.ylan.application.viewmodel.TaskViewModel
 
 class MainActivity : ComponentActivity() {
 
     private val taskViewModel: TaskViewModel by viewModels()
+    private val authViewModel: AuthViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +41,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    TaskManagerApp(viewModel = taskViewModel)
+                    TaskManagerApp(
+                        taskViewModel = taskViewModel,
+                        authViewModel = authViewModel
+                    )
                 }
             }
         }
@@ -45,13 +53,15 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TaskManagerApp(
-    viewModel: TaskViewModel = viewModel()
+    taskViewModel: TaskViewModel = viewModel(),
+    authViewModel: AuthViewModel = viewModel()
 ) {
-    val tasks by viewModel.tasks.collectAsStateWithLifecycle()
-    val allTasks by viewModel.allTasks.collectAsStateWithLifecycle()
-    val currentFilter by viewModel.filter.collectAsStateWithLifecycle()
+    val tasks by taskViewModel.tasks.collectAsStateWithLifecycle()
+    val allTasks by taskViewModel.allTasks.collectAsStateWithLifecycle()
+    val currentFilter by taskViewModel.filter.collectAsStateWithLifecycle()
+    val authUiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
-    val backStack = rememberNavBackStack(TaskNavKey.TaskList)
+    val backStack = rememberNavBackStack(TaskNavKey.Welcome)
 
     NavDisplay(
         backStack = backStack,
@@ -62,23 +72,105 @@ fun TaskManagerApp(
         },
         entryProvider = { key ->
             when (key) {
+                is TaskNavKey.Welcome -> NavEntry(key) {
+                    WelcomeScreen(
+                        onNavigateToSignUp = {
+                            authViewModel.resetForm()
+                            backStack.add(TaskNavKey.SignUp)
+                        },
+                        onNavigateToLogin = {
+                            authViewModel.resetForm()
+                            backStack.add(TaskNavKey.Login)
+                        },
+                        onNavigateToTaskManager = {
+                            backStack.add(TaskNavKey.TaskList)
+                        }
+                    )
+                }
+
+                is TaskNavKey.Login -> NavEntry(key) {
+                    LoginScreen(
+                        email = authUiState.email,
+                        onEmailChange = authViewModel::onEmailChanged,
+                        password = authUiState.password,
+                        onPasswordChange = authViewModel::onPasswordChanged,
+                        authError = authUiState.authError,
+                        onLogin = {
+                            authViewModel.login {
+                                backStack.add(TaskNavKey.TaskList)
+                            }
+                        },
+                        onGoogleSignIn = {
+                            authViewModel.googleSignIn {
+                                backStack.add(TaskNavKey.TaskList)
+                            }
+                        },
+                        onNavigateToSignUp = {
+                            authViewModel.resetForm()
+                            if (backStack.size > 1) {
+                                backStack.removeAt(backStack.lastIndex)
+                            }
+                            backStack.add(TaskNavKey.SignUp)
+                        },
+                        onBack = {
+                            authViewModel.clearError()
+                            if (backStack.size > 1) {
+                                backStack.removeAt(backStack.lastIndex)
+                            }
+                        }
+                    )
+                }
+
+                is TaskNavKey.SignUp -> NavEntry(key) {
+                    SignUpScreen(
+                        name = authUiState.name,
+                        onNameChange = authViewModel::onNameChanged,
+                        email = authUiState.email,
+                        onEmailChange = authViewModel::onEmailChanged,
+                        password = authUiState.password,
+                        onPasswordChange = authViewModel::onPasswordChanged,
+                        confirmPassword = authUiState.confirmPassword,
+                        onConfirmPasswordChange = authViewModel::onConfirmPasswordChanged,
+                        authError = authUiState.authError,
+                        onSignUp = {
+                            authViewModel.signUp {
+                                backStack.add(TaskNavKey.TaskList)
+                            }
+                        },
+                        onNavigateToLogin = {
+                            authViewModel.resetForm()
+                            if (backStack.size > 1) {
+                                backStack.removeAt(backStack.lastIndex)
+                            }
+                            backStack.add(TaskNavKey.Login)
+                        },
+                        onBack = {
+                            authViewModel.clearError()
+                            if (backStack.size > 1) {
+                                backStack.removeAt(backStack.lastIndex)
+                            }
+                        }
+                    )
+                }
+
                 is TaskNavKey.TaskList -> NavEntry(key) {
                     TaskListScreen(
                         tasks = tasks,
                         allTasks = allTasks,
                         currentFilter = currentFilter,
-                        onFilterSelected = viewModel::setTaskFilter,
-                        onToggleTaskCompletion = viewModel::toggleTaskCompletion,
+                        onFilterSelected = taskViewModel::setTaskFilter,
+                        onToggleTaskCompletion = taskViewModel::toggleTaskCompletion,
                         onEditTask = { task ->
                             backStack.add(TaskNavKey.AddEditTask(task.id))
                         },
-                        onDeleteTask = viewModel::deleteTask,
-                        onClearCompleted = viewModel::clearCompletedTasks,
+                        onDeleteTask = taskViewModel::deleteTask,
+                        onClearCompleted = taskViewModel::clearCompletedTasks,
                         onAddTask = {
                             backStack.add(TaskNavKey.AddEditTask(null))
                         }
                     )
                 }
+
                 is TaskNavKey.AddEditTask -> NavEntry(key) {
                     val taskToEdit = key.taskId?.let { id ->
                         allTasks.find { it.id == id }
@@ -87,9 +179,9 @@ fun TaskManagerApp(
                         task = taskToEdit,
                         onSave = { title, description, priority ->
                             if (taskToEdit == null) {
-                                viewModel.addTask(title, description, priority)
+                                taskViewModel.addTask(title, description, priority)
                             } else {
-                                viewModel.editTask(taskToEdit.id, title, description, priority)
+                                taskViewModel.editTask(taskToEdit.id, title, description, priority)
                             }
                             if (backStack.size > 1) {
                                 backStack.removeAt(backStack.lastIndex)
@@ -102,6 +194,7 @@ fun TaskManagerApp(
                         }
                     )
                 }
+
                 else -> error("Unknown key: $key")
             }
         }
