@@ -1,0 +1,22 @@
+# Gradle build output
+.gradle/
+build/
+**/build/
+
+# Local configuration file (sdk path, api keys, etc.)
+local.properties
+
+# Android Studio / IntelliJ IDEA files
+.idea/
+*.iml
+.kotlin/
+.agent/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Android build/cache files
+/captures
+.externalNativeBuild
+.cxx
